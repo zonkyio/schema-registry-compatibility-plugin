@@ -4,7 +4,7 @@
 
     <groupId>io.zonky</groupId>
     <artifactId>schema-registry-compatibility-plugin</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1-SNAPSHOT</version>
     <packaging>maven-plugin</packaging>
 
     <name>schema-registry-compatibility-plugin Maven Plugin</name>
@@ -24,7 +24,7 @@
         <connection>scm:git:https://github.com/zonkyio/schema-registry-compatibility-plugin.git</connection>
         <developerConnection>scm:git:https://github.com/zonkyio/schema-registry-compatibility-plugin.git</developerConnection>
         <url>https://github.com/zonkyio/schema-registry-compatibility-plugin</url>
-        <tag>v1.0.0</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <distributionManagement>
