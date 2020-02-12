@@ -10,7 +10,6 @@ import org.apache.avro.Schema;
 import org.apache.avro.SchemaParseException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
@@ -37,8 +36,9 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import io.zonky.kafka.registry.compatibility.domain.CompatibilityCheckResult;
-import io.zonky.kafka.registry.compatibility.util.LazySupplier;
 import io.zonky.kafka.registry.compatibility.domain.SchemaFileCheckingContext;
+import io.zonky.kafka.registry.compatibility.exception.SchemaCompatibilityCheckException;
+import io.zonky.kafka.registry.compatibility.util.LazySupplier;
 
 @Mojo(name = "test-compatibility")
 public class TestSchemaCompatibilityMojo extends AbstractMojo {
@@ -61,10 +61,10 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
      * Regex pattern (in java regex syntax), that is used to extract following sub-components of remote schema registry's subject names.
      * - topicname
      * - schematypefullname
-     *
+     * <p>
      * For example if you're using subject naming pattern such as "name.of.topic-name.of.schema.Type-value", then
      * following regex may be used to extract topicname and schematypefullname:
-`    *
+     * `    *
      * ^(?<topicname>.+)-(?<schematypefullname>.[^-]+)-value
      */
     @Parameter(required = true)
@@ -129,6 +129,14 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
             );
         }
 
+        // print checking statistics for each file
+        getLog().info(String.format(" Schema checks complete. Following files were checked:"));
+        schemaFileCheckingContexts.stream().forEach(ctx -> {
+            final List<CompatibilityCheckResult> incompatibleResults = ctx.getCompatibilityCheckResults().stream().filter(res -> !res.isCompatible()).collect(Collectors.toList());
+            final long compatibleCount = ctx.getCompatibilityCheckResults().size() - incompatibleResults.size();
+            getLog().info(String.format(" - '%s' (compatible_subjects=%s, incompatible_subjects=%s)", ctx.getFile().getName(), compatibleCount, incompatibleResults.size()));
+        });
+
         // in case some of the files with local schema were not checked at all, WARN it
         final List<SchemaFileCheckingContext> filesWithNoChecks = schemaFileCheckingContexts.stream().filter(ctx -> ctx.getCompatibilityCheckResults().isEmpty()).collect(Collectors.toList());
         if (!filesWithNoChecks.isEmpty()) {
@@ -145,6 +153,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Constructs a SchemaFileCheckingContext object from specified schemaFile.
+     *
      * @param schemaFile single .avsc avro schema file
      */
     private SchemaFileCheckingContext toSchemaFileCheckingContext(final File schemaFile) {
@@ -154,8 +163,9 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Extracts a list of file from single FileSet definition
+     *
      * @param fileSetManager maven's fileset manager component
-     * @param basedir project's baseDir
+     * @param basedir        project's baseDir
      */
     private Function<FileSet, List<File>> getIncludedFiles(final FileSetManager fileSetManager, final File basedir) {
         return fs -> Arrays.stream(fileSetManager.getIncludedFiles(fs)).map(fn -> new File(basedir, fs.getDirectory() + File.separator + fn)).collect(Collectors.toList());
@@ -163,6 +173,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Parses schema of the checked file and adds it to the context.
+     *
      * @param schemaFileCheckingContext context representing a single checked local schema file
      */
     private SchemaFileCheckingContext addSchema(SchemaFileCheckingContext schemaFileCheckingContext) {
@@ -187,12 +198,13 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
             return schemaFileCheckingContext;
         } catch (IOException | SchemaParseException e) {
             getLog().error("Exception thrown while loading " + schemaFileCheckingContext.getFile(), e);
-            throw new RuntimeException(e);
+            throw new SchemaCompatibilityCheckException(e);
         }
     }
 
     /**
      * Adds subject names from remote schema registry which match currently checked file and ads them to context.
+     *
      * @param schemaRegistrySubjectsSupplier function that provides list of remote schema registry subjects
      */
     private Function<SchemaFileCheckingContext, SchemaFileCheckingContext> addMatchingRegistrySubjectNames(final Supplier<Collection<String>> schemaRegistrySubjectsSupplier) {
@@ -210,6 +222,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Performs compatibility check for current file and all its matching remote schema registry subjects. Adds check results to the context.
+     *
      * @param clientSupplier supplier that provides configured SchemaRegistryClient
      */
     private Function<SchemaFileCheckingContext, SchemaFileCheckingContext> addCompatibilityCheckResults(final Supplier<SchemaRegistryClient> clientSupplier) {
@@ -234,7 +247,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
                     if (getLog().isDebugEnabled()) {
                         getLog().error(String.format("Exception found between schema file %s and registry subject %s", schemaTypeFullName, schemaFilePath));
                     }
-                    throw new RuntimeException("Compatibility check failed", e);
+                    throw new SchemaCompatibilityCheckException("Compatibility check failed", e);
                 }
             }
             return schemaFileCheckingContext;
@@ -243,7 +256,8 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Takes schema registry subject's name and extracts full name of schema type from it.
-     * @param subjectName remote schema registry subject name
+     *
+     * @param subjectName                   remote schema registry subject name
      * @param subjectPartsExtractionPattern regex that should contain "schematypefullname" named group
      */
     private String extractFullTypeNameFromSubject(final String subjectName, final Pattern subjectPartsExtractionPattern) {
@@ -258,6 +272,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Reads provided avro schema file (json), parses it and builds full name (namespace+name) of the type defined in file.
+     *
      * @param filePath file with avro (json) schema
      */
     private String getSchemaTypeFullName(final File filePath) {
@@ -267,19 +282,20 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
             final String name = schemaDescJSON.getAsJsonPrimitive("name").getAsString();
             return namespace + "." + name;
         } catch (FileNotFoundException e) {
-            throw new RuntimeException(e);
+            throw new SchemaCompatibilityCheckException(e);
         }
     }
 
     /**
      * Performs remote API call against schema registry. Fetches all subject names, which are currently defined in schema registry.
+     *
      * @param clientSupplier function that provides schema registry client
      */
     private Collection<String> fetchSchemaRegistrySubjects(final Supplier<SchemaRegistryClient> clientSupplier) {
         try {
             return clientSupplier.get().getAllSubjects();
         } catch (IOException | RestClientException e) {
-            throw new RuntimeException(e);
+            throw new SchemaCompatibilityCheckException(e);
         }
     }
 
@@ -295,6 +311,7 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * Creates a parser, which already has pre-parsed dependencies ("imports")
+     *
      * @param dependencies list of schema files which should be treated as dependencies ("imports")
      */
     private Schema.Parser parserWithDependencies(List<String> dependencies) {
@@ -304,9 +321,9 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
             try (FileInputStream inputStream = new FileInputStream(dependency)) {
                 parserWithDependencies.parse(inputStream);
                 getLog().debug(String.format("Parsing imports:%s", dependency));
-            } catch (IOException | SchemaParseException ex) {
-                throw new RuntimeException(
-                        String.format("Unable to parse dependency %s", dependency));
+            } catch (IOException | SchemaParseException e) {
+                throw new SchemaCompatibilityCheckException(
+                        String.format("Unable to parse dependency %s", dependency), e);
             }
         }
         return parserWithDependencies;
