@@ -16,6 +16,15 @@ schema registry.
 schema files. 
 - Every local schema is checked against all its matching remote schema registry subjects
 
+## Process of compatibility checking
+
+Every local schema file (as configured via `schemaFileSets`) gets checked against all matching remote schema-repository subjects. In order to find
+matching subjects, full schema schema type name (extracted from local schema file) is used.
+ 
+First the names of all the existing subjects are fetched from schema registry and then  `schemaRegistrySubjectNamePattern` is applied to each subject in order to 
+extract regex group called `schematypefullname` (regex group with this name must be defined in `schemaRegistrySubjectNamePattern`). Once `schematypefullname` has 
+been extracted, the subject can be paired to checked local schema file.
+
 ## Typical configuration
 
 ```xml
