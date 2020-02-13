@@ -53,7 +53,7 @@ been extracted, the subject can be paired to checked local schema file.
                     </schemaRegistrySubjectNamePattern>
                     <schemaFileSets>
                         <fileset>
-                            <directory>src/main/resources/avro</directory>
+                            <directory>${project.basedir}/src/main/resources/avro</directory>
                             <includes>
                                 <include>**/*.avsc</include>
                             </includes>
