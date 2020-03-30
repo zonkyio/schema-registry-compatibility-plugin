@@ -94,12 +94,11 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException {
         final FileSetManager fileSetManager = new FileSetManager();
-        final File basedir = project.getBasedir();
         final Supplier<SchemaRegistryClient> clientSupplier = new LazySupplier<>(this::buildClient);
 
         // Find schema files to be check, load their local schemas and check them against all matching subjects in remote schema registry
         final List<SchemaFileCheckingContext> schemaFileCheckingContexts = Arrays.stream(schemaFileSets)
-                .map(this.getIncludedFiles(fileSetManager, basedir))
+                .map(this.getIncludedFiles(fileSetManager))
                 .flatMap(List::stream)
                 .map(this::toSchemaFileCheckingContext)
                 .map(this::addSchema)
@@ -130,8 +129,8 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
         }
 
         // print checking statistics for each file
-        getLog().info(String.format(" Schema checks complete. Following files were checked:"));
-        schemaFileCheckingContexts.stream().forEach(ctx -> {
+        getLog().info(" Schema checks complete. Following files were checked:");
+        schemaFileCheckingContexts.forEach(ctx -> {
             final List<CompatibilityCheckResult> incompatibleResults = ctx.getCompatibilityCheckResults().stream().filter(res -> !res.isCompatible()).collect(Collectors.toList());
             final long compatibleCount = ctx.getCompatibilityCheckResults().size() - incompatibleResults.size();
             getLog().info(String.format(" - '%s' (compatible_subjects=%s, incompatible_subjects=%s)", ctx.getFile().getName(), compatibleCount, incompatibleResults.size()));
@@ -165,10 +164,9 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
      * Extracts a list of file from single FileSet definition
      *
      * @param fileSetManager maven's fileset manager component
-     * @param basedir        project's baseDir
      */
-    private Function<FileSet, List<File>> getIncludedFiles(final FileSetManager fileSetManager, final File basedir) {
-        return fs -> Arrays.stream(fileSetManager.getIncludedFiles(fs)).map(fn -> new File(basedir, fs.getDirectory() + File.separator + fn)).collect(Collectors.toList());
+    private Function<FileSet, List<File>> getIncludedFiles(final FileSetManager fileSetManager) {
+        return fs -> Arrays.stream(fileSetManager.getIncludedFiles(fs)).map(fn -> new File(fs.getDirectory(), fn)).collect(Collectors.toList());
     }
 
     /**
