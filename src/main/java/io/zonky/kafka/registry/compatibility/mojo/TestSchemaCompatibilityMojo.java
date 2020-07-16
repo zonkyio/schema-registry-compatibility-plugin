@@ -78,8 +78,13 @@ public class TestSchemaCompatibilityMojo extends AbstractMojo {
 
     /**
      * URLs to remote schema registry/registries.
+     * <p/>
+     * Typically configured in pom.xml (<code>plugin -> configuration -> schemaRegistryUrls</code>).
+     * <p/>
+     * Can also be overridden via runtime environment property <code>-Dschema-registry-compatibility-plugin.schema-registry-urls=http://some.url</code>
+     *
      */
-    @Parameter(required = true)
+    @Parameter(property = "schema-registry-compatibility-plugin.schema-registry-urls", required = true)
     private List<String> schemaRegistryUrls = new LinkedList<>();
 
     /**
